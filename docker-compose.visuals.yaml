@@ -1,0 +1,21 @@
+name: blog-visuals
+services:
+  kroki:
+    image: yuzutech/kroki:0.28.0
+    ports:
+      - "127.0.0.1:8001:8000"
+    environment:
+      KROKI_MERMAID_HOST: mermaid
+      KROKI_SAFE_MODE: secure
+      KROKI_CONVERT_TIMEOUT: 15s
+      KROKI_MAX_BODY_SIZE: 64kb
+    depends_on:
+      - mermaid
+    networks: [rendering, gateway]
+  mermaid:
+    image: yuzutech/kroki-mermaid:0.28.0
+    networks: [rendering]
+networks:
+  gateway: {}
+  rendering:
+    internal: true

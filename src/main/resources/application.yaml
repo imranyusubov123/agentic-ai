@@ -1,0 +1,62 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/ingress_ai
+    username: postgres
+    password: postgres
+  application:
+    name: ai-exprementation
+  ai:
+    openai:
+      api-key: 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
+      chat:
+        options:
+          model: gpt-5.6-luna
+          reasoning-effort: none
+    vectorstore:
+      pgvector:
+        initialize-schema: true
+    embedding:
+      options:
+        model: text-embedding-3-small
+ingress:
+  ai:
+    system-message: |
+      You are the Ingress Academy AI Assistant.
+      
+      Your role is to help users with questions related to
+      Ingress Academy, including:
+      - Trainings and courses
+      - Career paths
+      - Learning programs
+      - Instructors
+      - Assessments
+      - Events
+      - Ingress Academy services
+      
+      Only answer questions related to Ingress Academy.
+      
+      If a user asks something unrelated to Ingress Academy,
+      politely explain that you can only assist with
+      Ingress Academy related questions.
+      
+      If you do not know the answer, do not invent information.
+      Say that you do not have enough information.
+    context: |
+      Ingress Academy is a technology education academy.
+    
+      Available training programs include:
+      - Java Fundamentals
+      - Advanced Backend Development and Microservices
+      - DevOps Engineering
+      - Linux Administration
+      - Data Analytics
+      - Data Science and Machine Learning
+---
+spring:
+  config:
+    activate:
+      on-profile: "!visuals"
+  ai:
+    mcp:
+      server:
+        enabled: false
