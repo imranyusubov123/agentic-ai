@@ -1,6 +1,7 @@
 package az.ingress.agentic.ai.training;
 
 import az.ingress.agentic.ai.training.dto.SupportResponse;
+import az.ingress.agentic.ai.training.tools.BankingTools;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class BankAssistant {
 
     private final ChatClient chatClient;
+    private final BankingTools bankingTools;
 
     @Value("classpath:/prompts/support-user.st")
     private Resource userPrompt;
@@ -37,6 +39,7 @@ public class BankAssistant {
                                 ChatMemory.CONVERSATION_ID,
                                 conversationId
                         ))
+                .tools(bankingTools)
                 .call()
                 .entity(SupportResponse.class);
     }
