@@ -3,19 +3,24 @@ Customer Context:
 - Preferred Language: {language}
 
 Relevant Bank Knowledge:
+
+--- BEGIN BANK KNOWLEDGE ---
+
 {context}
 
+--- END BANK KNOWLEDGE ---
+
 Customer Request:
+
+--- BEGIN CUSTOMER REQUEST ---
+
 {message}
 
-Instructions:
-- Respond in the customer's preferred language.
-- Address the customer's request directly.
-- Use the relevant bank knowledge when it contains information needed to answer the question.
-- Do not invent bank policies or information not supported by the provided context or trusted tools.
-- If required information is missing, say so clearly.
+--- END CUSTOMER REQUEST ---
 
-Also determine:
+Respond according to the system instructions.
+
+Determine:
 - the customer's intent
-- your confidence between 0 and 1
-- whether resolving the request requires an action
+- confidence between 0 and 1
+- whether the request requires an action

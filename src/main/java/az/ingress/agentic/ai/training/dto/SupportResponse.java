@@ -4,6 +4,6 @@ public record SupportResponse(
         String answer,
         String intent,
         double confidence,
-        boolean requiresAction
-) {
-}
+        boolean requiresAction,
+        InformationSource source
+) {}
