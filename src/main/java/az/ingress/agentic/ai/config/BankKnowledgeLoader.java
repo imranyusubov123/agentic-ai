@@ -4,11 +4,13 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Map;
 
+//@Profile("local")
 @Component
 @RequiredArgsConstructor
 public class BankKnowledgeLoader implements CommandLineRunner {
@@ -23,7 +25,7 @@ public class BankKnowledgeLoader implements CommandLineRunner {
                         Ingress Bank Card Transaction Dispute Policy
                         
                         Customers must submit card transaction disputes
-                        within 30 calendar days of the transaction date.
+                        within 45 calendar days of the transaction date.
                         
                         Customers can submit a dispute through Mobile Banking
                         or by contacting customer support.
@@ -65,10 +67,24 @@ public class BankKnowledgeLoader implements CommandLineRunner {
                 )
         );
 
+
+        Document branchInfo = new Document(
+                """
+                        Ingress Bank Branch Info
+                        
+                        Branches are located at Baku & Sumqait
+                        """,
+                Map.of(
+                        "type", "info",
+                        "topic", "branches"
+                )
+        );
+
         vectorStore.add(List.of(
                 disputePolicy,
                 atmPolicy,
-                transferPolicy
+                transferPolicy,
+                branchInfo
         ));
     }
 }
