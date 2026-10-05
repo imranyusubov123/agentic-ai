@@ -21,4 +21,15 @@ public class BankingTools {
 
         return bankingService.getAccountBalance(accountId);
     }
+
+
+    @Tool(description = """
+            Returns the current status of a banking transaction.
+            Use this tool when the customer asks whether a specific
+            transaction succeeded, failed, is pending, or was declined.
+            """)
+    public String getTransactionStatus(String transactionId) {
+
+        return "DECLINED";
+    }
 }
