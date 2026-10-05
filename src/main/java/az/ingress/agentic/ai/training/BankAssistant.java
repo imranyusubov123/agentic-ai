@@ -1,8 +1,8 @@
 package az.ingress.agentic.ai.training;
 
-import az.ingress.agentic.ai.training.dto.SupportResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,10 +19,14 @@ public class BankAssistant {
     private Resource userPrompt;
 
     @GetMapping("/bank")
-    public SupportResponse chat(
+    public String chat(
             @RequestParam String message,
-            @RequestParam(defaultValue = "English") String language,
-            @RequestParam(defaultValue = "Web") String channel) {
+            @RequestParam(defaultValue = "default")
+            String conversationId,
+            @RequestParam(defaultValue = "English")
+            String language,
+            @RequestParam(defaultValue = "Web")
+            String channel) {
 
         return chatClient.prompt()
                 .user(user -> user
@@ -30,7 +34,12 @@ public class BankAssistant {
                         .param("message", message)
                         .param("language", language)
                         .param("channel", channel))
+                .advisors(advisor -> advisor
+                        .param(
+                                ChatMemory.CONVERSATION_ID,
+                                conversationId
+                        ))
                 .call()
-                .entity(SupportResponse.class);
+                .content();
     }
 }
