@@ -11,3 +11,6 @@ CREATE INDEX IF NOT EXISTS idx_spring_ai_chat_memory_conversation_id
 
 CREATE INDEX IF NOT EXISTS idx_spring_ai_chat_memory_conversation_sequence
     ON spring_ai_chat_memory (conversation_id, sequence_id);
+
+
+CREATE EXTENSION IF NOT EXISTS vector;
