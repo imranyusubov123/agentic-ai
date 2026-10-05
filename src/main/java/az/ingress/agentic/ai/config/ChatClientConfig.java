@@ -12,10 +12,11 @@ public class ChatClientConfig {
     @Bean
     public ChatClient chatClient(
             ChatClient.Builder builder,
-            @Value("classpath:/prompts/support-system.st") Resource systemPrompt) {
+            @Value("classpath:/prompts/support-system.st")
+            Resource systemPrompt) {
 
         return builder
-                //     .defaultSystem(systemPrompt)
+                .defaultSystem(systemPrompt)
                 .build();
     }
 }
