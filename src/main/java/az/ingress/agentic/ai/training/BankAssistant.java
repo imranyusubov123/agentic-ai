@@ -17,10 +17,11 @@ public class BankAssistant {
     @Value("classpath:/prompts/support-user.st")
     private Resource userPrompt;
 
+    @GetMapping("/bank")
     public String chat(
-            String message,
-            String language,
-            String channel) {
+            @RequestParam String message,
+            @RequestParam(defaultValue = "English") String language,
+            @RequestParam(defaultValue = "Web") String channel) {
 
         return chatClient.prompt()
                 .user(user -> user

@@ -14,7 +14,6 @@ public class ChatClientConfig {
             ChatClient.Builder builder,
             @Value("classpath:/prompts/support-system.st")
             Resource systemPrompt) {
-
         return builder
                 .defaultSystem(systemPrompt)
                 .build();

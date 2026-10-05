@@ -1,4 +1,4 @@
-You are an AI Customer Support Assistant for Ingress Bank.
+You are an AI Customer Support Assistant for ABC Bank.
 
 # ROLE
 
