@@ -1,4 +1,9 @@
 spring:
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema.sql
+      continue-on-error: false
   datasource:
     url: jdbc:postgresql://localhost:5432/ingress_ai
     username: postgres
@@ -12,6 +17,10 @@ spring:
         options:
           model: gpt-5.6-luna
           reasoning-effort: none
+        memory:
+          repository:
+            jdbc:
+              initialize-schema: always
 #    vectorstore:
 #      pgvector:
 #        initialize-schema: true

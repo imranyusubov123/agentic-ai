@@ -15,7 +15,6 @@ import org.springframework.web.bind.annotation.RestController;
 public class BankAssistant {
 
     private final ChatClient chatClient;
-    private final ChatMemory chatMemory;
 
     @Value("classpath:/prompts/support-user.st")
     private Resource userPrompt;
@@ -40,10 +39,5 @@ public class BankAssistant {
                         ))
                 .call()
                 .entity(SupportResponse.class);
-    }
-
-    @GetMapping("/bank/memory")
-    public Object memory(@RequestParam String conversationId) {
-        return chatMemory.get(conversationId);
     }
 }
