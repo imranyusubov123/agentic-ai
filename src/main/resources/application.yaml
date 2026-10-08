@@ -7,7 +7,7 @@ spring:
     name: ai-exprementation
   ai:
     openai:
-      api-key: <open-ai key>
+      api-key: ${OPENAI_API_KEY}
       chat:
         options:
           model: gpt-5.6-luna
