@@ -1,4 +1,9 @@
 spring:
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema.sql
+      continue-on-error: false
   datasource:
     url: jdbc:postgresql://localhost:5432/ingress_ai
     username: postgres
@@ -12,51 +17,15 @@ spring:
         options:
           model: gpt-5.6-luna
           reasoning-effort: none
-#    vectorstore:
-#      pgvector:
-#        initialize-schema: true
-#    embedding:
-#      options:
-#        model: text-embedding-3-small
-#ingress:
-#  ai:
-#    system-message: |
-#      You are the Ingress Academy AI Assistant.
-#
-#      Your role is to help users with questions related to
-#      Ingress Academy, including:
-#      - Trainings and courses
-#      - Career paths
-#      - Learning programs
-#      - Instructors
-#      - Assessments
-#      - Events
-#      - Ingress Academy services
-#
-#      Only answer questions related to Ingress Academy.
-#
-#      If a user asks something unrelated to Ingress Academy,
-#      politely explain that you can only assist with
-#      Ingress Academy related questions.
-#
-#      If you do not know the answer, do not invent information.
-#      Say that you do not have enough information.
-#    context: |
-#      Ingress Academy is a technology education academy.
-#
-#      Available training programs include:
-#      - Java Fundamentals
-#      - Advanced Backend Development and Microservices
-#      - DevOps Engineering
-#      - Linux Administration
-#      - Data Analytics
-#      - Data Science and Machine Learning
-#---
-#spring:
-#  config:
-#    activate:
-#      on-profile: "!visuals"
-#  ai:
-#    mcp:
-#      server:
-#        enabled: false
+        memory:
+          repository:
+            jdbc:
+              initialize-schema: always
+      embedding:
+        options:
+          model: text-embedding-3-small
+    vectorstore:
+      pgvector:
+        initialize-schema: true
+        dimensions: 1536
+        distance-type: COSINE_DISTANCE
