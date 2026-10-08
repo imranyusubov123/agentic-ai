@@ -7,7 +7,7 @@ spring:
     name: ai-exprementation
   ai:
     openai:
-      api-key: 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
+      api-key: <open-ai key>
       chat:
         options:
           model: gpt-5.6-luna
