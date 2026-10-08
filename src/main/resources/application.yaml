@@ -2,7 +2,7 @@ spring:
   datasource:
     url: jdbc:postgresql://localhost:5432/ingress_ai
     username: postgres
-    password: postgres
+    password: ${DB_PASSWORD}
   application:
     name: ai-exprementation
   ai:
