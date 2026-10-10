@@ -1,4 +1,8 @@
 spring:
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 20MB
   sql:
     init:
       mode: always
@@ -12,7 +16,7 @@ spring:
     name: ai-exprementation
   ai:
     openai:
-      api-key: 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
+      api-key: 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
       chat:
         options:
           model: gpt-5.6-luna
@@ -29,3 +33,5 @@ spring:
         initialize-schema: true
         dimensions: 1536
         distance-type: COSINE_DISTANCE
+docling:
+  base-url: http://localhost:5001

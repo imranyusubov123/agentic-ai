@@ -9,3 +9,12 @@ services:
 
     ports:
       - "5432:5432"
+  docling:
+    image: quay.io/docling-project/docling-serve:latest
+    container_name: docling
+    ports:
+      - "5001:5001"
+    environment:
+      - DOCLING_SERVE_MAX_SYNC_WAIT=900
+      - DOCLING_SERVE_ENABLE_UI=true
+    restart: unless-stopped
