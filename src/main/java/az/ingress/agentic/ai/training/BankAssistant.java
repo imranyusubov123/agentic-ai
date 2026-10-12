@@ -3,10 +3,9 @@ package az.ingress.agentic.ai.training;
 import az.ingress.agentic.ai.training.context.AiContext;
 import az.ingress.agentic.ai.training.context.AiContextBuilder;
 import az.ingress.agentic.ai.training.dto.SupportResponse;
-import az.ingress.agentic.ai.training.knowledge_management.KnowledgeRetrievalService;
+import az.ingress.agentic.ai.training.services.HybridSearchService;
 import az.ingress.agentic.ai.training.tools.BankingTools;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.beans.factory.annotation.Value;
@@ -17,15 +16,16 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
-@Slf4j
+import java.util.List;
+import java.util.Map;
+
 @RestController
 @RequiredArgsConstructor
 public class BankAssistant {
-
     private final ChatClient chatClient;
     private final BankingTools bankingTools;
     private final AiContextBuilder contextBuilder;
-    private final KnowledgeRetrievalService knowledgeRetrievalService;
+    private final HybridSearchService hybridSearchService;
 
     @Value("classpath:/prompts/support-user.st")
     private Resource userPrompt;
@@ -34,64 +34,50 @@ public class BankAssistant {
     public SupportResponse chat(
             @RequestParam("message") String message,
             @RequestParam("conversationId") String conversationId,
-            @RequestParam(value = "ingestionId", required = false)
-            String ingestionId,
-            @RequestParam(value = "language", defaultValue = "English")
-            String language,
-            @RequestParam(value = "channel", defaultValue = "Web")
-            String channel
-    ) {
-        log.info("Received request {} ", conversationId);
-        requireNonBlank(message, "message");
-        requireNonBlank(conversationId, "conversationId");
+            @RequestParam(value = "ingestionId", required = false) String ingestionId,
+            @RequestParam(value = "language", defaultValue = "English") String language,
+            @RequestParam(value = "channel", defaultValue = "Web") String channel) {
+        if (message.isBlank() || conversationId.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "message and conversationId must not be blank.");
+        }
 
-        AiContext context = contextBuilder.build(
-                message,
-                conversationId,
-                language,
-                channel
-        );
+        AiContext context = contextBuilder.build(message, conversationId, language, channel);
+        var retrieval = hybridSearchService.search(
+                new HybridSearchService.HybridInput(message, ingestionId, 3, 20));
 
-        String retrievedPassages = knowledgeRetrievalService.retrieve(
-                message.strip(),
-                ingestionId
-        );
-
-        String existingContext = context.knowledgeContext() == null
-                ? ""
-                : context.knowledgeContext();
-
-        String combinedContext = """
-                EXISTING APPLICATION CONTEXT:
-                %s
-                
-                RETRIEVED DOCUMENT PASSAGES:
-                %s
-                """.formatted(existingContext, retrievedPassages);
+        // Preserve existing non-retrieval context. If contextBuilder already performs
+        // vector retrieval, remove that old retrieval there to avoid two pipelines.
+        String existingContext = context.knowledgeContext() == null ? "" : context.knowledgeContext();
+        String evidence = formatEvidence(retrieval.matches());
+        String combinedContext = "Existing application context:\n" + existingContext
+                + "\n\nRetrieved document evidence for this request:\n" + evidence;
 
         return chatClient.prompt()
-                .user(user -> user
-                        .text(userPrompt)
+                .user(user -> user.text(userPrompt)
                         .param("message", message)
                         .param("language", context.language())
                         .param("channel", context.channel())
                         .param("context", combinedContext))
-                .advisors(advisor -> advisor
-                        .param(
-                                ChatMemory.CONVERSATION_ID,
-                                context.conversationId()
-                        ))
+                .advisors(advisor -> advisor.param(ChatMemory.CONVERSATION_ID, context.conversationId()))
                 .tools(bankingTools)
                 .call()
                 .entity(SupportResponse.class);
     }
 
-    private static void requireNonBlank(String value, String name) {
-        if (value == null || value.isBlank()) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    name + " is required."
-            );
+    private static String formatEvidence(List<HybridSearchService.HybridHit> hits) {
+        if (hits.isEmpty()) return "No document passages were retrieved for this request.";
+        StringBuilder result = new StringBuilder();
+        for (int i = 0; i < hits.size(); i++) {
+            var hit = hits.get(i);
+            Map<String, Object> metadata = hit.metadata() == null ? Map.of() : hit.metadata();
+            result.append("[S").append(i + 1).append("]\n")
+                    .append("Chunk ID: ").append(hit.id()).append('\n')
+                    .append("Source: ").append(metadata.getOrDefault("source_file", "Unknown")).append('\n')
+                    .append("Pages: ").append(metadata.getOrDefault("page_numbers", List.of())).append('\n')
+                    .append("Headings: ").append(metadata.getOrDefault("headings", List.of())).append('\n')
+                    .append("Passage:\n").append(hit.text()).append("\n\n");
         }
+        return result.toString();
     }
 }
