@@ -19,7 +19,7 @@ public class ChatClientConfig {
 
         return MessageWindowChatMemory.builder()
                 .chatMemoryRepository(chatMemoryRepository)
-                .maxMessages(20)
+                .maxMessages(3)
                 .build();
     }
 

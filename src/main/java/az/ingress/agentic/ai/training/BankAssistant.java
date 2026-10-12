@@ -26,6 +26,7 @@ import java.util.UUID;
 public class BankAssistant {
 
     private final ChatClient chatClient;
+    private final ChatMemory chatMemory;
     private final BankingTools bankingTools;
     private final AiContextBuilder contextBuilder;
     private final HybridSearchService hybridSearchService;
@@ -59,6 +60,22 @@ public class BankAssistant {
                 conversationId,
                 language,
                 channel
+        );
+
+        // Inspect stored memory before the advisor processes this request.
+        // This is NOT the final assembled model request.
+        var historyBefore = chatMemory.get(context.conversationId());
+
+        long historyTextCharacters = historyBefore.stream()
+                .mapToLong(item -> characterCount(item.getText()))
+                .sum();
+
+        log.info(
+                "BANK_MEMORY_BEFORE requestId={} "
+                        + "storedMessages={} storedTextChars={}",
+                requestId,
+                historyBefore.size(),
+                historyTextCharacters
         );
 
         var retrieval = hybridSearchService.search(
@@ -105,7 +122,6 @@ public class BankAssistant {
         long modelStarted = System.nanoTime();
 
         try {
-            // One invocation returns both the parsed answer and usage metadata.
             var result = chatClient.prompt()
                     .user(user -> user
                             .text(userPrompt)
@@ -143,10 +159,8 @@ public class BankAssistant {
                 );
             } else {
                 log.warn(
-                        "BANK_AI_USAGE requestId={} "
-                                + "usageUnavailable=true modelDurationMs={}",
-                        requestId,
-                        elapsedMillis(modelStarted)
+                        "BANK_AI_USAGE requestId={} usageUnavailable=true",
+                        requestId
                 );
             }
 
@@ -159,6 +173,16 @@ public class BankAssistant {
                 );
             }
 
+            // The memory advisor saves the exchange.
+            // Do not manually add the same messages again here.
+            var historyAfter = chatMemory.get(context.conversationId());
+
+            log.info(
+                    "BANK_MEMORY_AFTER requestId={} storedMessages={}",
+                    requestId,
+                    historyAfter.size()
+            );
+
             log.info(
                     "BANK_COMPLETED requestId={} totalDurationMs={}",
                     requestId,
@@ -168,7 +192,6 @@ public class BankAssistant {
             return answer;
 
         } catch (RuntimeException exception) {
-            // Log the failure type without dumping prompts or customer data.
             log.error(
                     "BANK_FAILED requestId={} exceptionType={} "
                             + "totalDurationMs={}",
