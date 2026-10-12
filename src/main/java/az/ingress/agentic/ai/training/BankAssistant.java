@@ -6,6 +6,7 @@ import az.ingress.agentic.ai.training.dto.SupportResponse;
 import az.ingress.agentic.ai.training.knowledge_management.KnowledgeRetrievalService;
 import az.ingress.agentic.ai.training.tools.BankingTools;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.beans.factory.annotation.Value;
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+@Slf4j
 @RestController
 @RequiredArgsConstructor
 public class BankAssistant {
@@ -39,6 +41,7 @@ public class BankAssistant {
             @RequestParam(value = "channel", defaultValue = "Web")
             String channel
     ) {
+        log.info("Received request {} ", conversationId);
         requireNonBlank(message, "message");
         requireNonBlank(conversationId, "conversationId");
 
@@ -61,7 +64,7 @@ public class BankAssistant {
         String combinedContext = """
                 EXISTING APPLICATION CONTEXT:
                 %s
-
+                
                 RETRIEVED DOCUMENT PASSAGES:
                 %s
                 """.formatted(existingContext, retrievedPassages);
