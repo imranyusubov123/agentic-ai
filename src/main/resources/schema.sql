@@ -14,6 +14,7 @@ CREATE INDEX IF NOT EXISTS idx_spring_ai_chat_memory_conversation_sequence
 
 CREATE EXTENSION IF NOT EXISTS vector;
 
+--------------_Conversation History -------------------
 CREATE TABLE IF NOT EXISTS conversation_exchange (
     id UUID PRIMARY KEY,
     conversation_id TEXT NOT NULL,
@@ -21,6 +22,9 @@ CREATE TABLE IF NOT EXISTS conversation_exchange (
     answer TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+ALTER TABLE conversation_exchange
+    ADD COLUMN IF NOT EXISTS embedding VECTOR;
 
 CREATE INDEX IF NOT EXISTS conversation_exchange_recent_idx
     ON conversation_exchange (conversation_id, created_at DESC);
