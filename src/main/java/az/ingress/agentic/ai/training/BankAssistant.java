@@ -7,10 +7,12 @@ import az.ingress.agentic.ai.training.dto.SupportResponse;
 import az.ingress.agentic.ai.training.services.ConversationArchiveService;
 import az.ingress.agentic.ai.training.services.HybridSearchService;
 import az.ingress.agentic.ai.training.tools.BankingTools;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpStatus;
@@ -26,6 +28,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class BankAssistant {
 
+    private final MeterRegistry meterRegistry;
     private final ChatClient chatClient;
     private final ChatMemory chatMemory;
     private final BankingTools bankingTools;
@@ -35,6 +38,25 @@ public class BankAssistant {
 
     @Value("classpath:/prompts/support-user.st")
     private Resource userPrompt;
+
+    // Standard text-token pricing; USD per million tokens.
+    @Value("${banking.ai.cost.model}")
+    private String pricedModel;
+
+    @Value("${banking.ai.cost.input-per-million}")
+    private double inputPrice;
+
+    @Value("${banking.ai.cost.cached-input-per-million}")
+    private double cachedInputPrice;
+
+    @Value("${banking.ai.cost.cache-write-per-million}")
+    private double cacheWritePrice;
+
+    @Value("${banking.ai.cost.output-per-million}")
+    private double outputPrice;
+
+    @Value("${banking.ai.cost.max-input-tokens:272000}")
+    private int maxPricedInputTokens;
 
     @GetMapping("/bank")
     public SupportResponse chat(
@@ -160,14 +182,35 @@ public class BankAssistant {
                 var metadata = response.getMetadata();
                 var usage = metadata.getUsage();
 
+                Integer inputTokens = usage.getPromptTokens();
+                Integer outputTokens = usage.getCompletionTokens();
+                Long cachedInputTokens = usage.getCacheReadInputTokens();
+
+                recordEstimatedChatCost(metadata.getModel(), usage, requestId);
+
+                // Preserve unavailable usage: do not interpret null as zero.
+                if (cachedInputTokens != null && cachedInputTokens >= 0) {
+                    String model = metadata.getModel();
+
+                    meterRegistry.counter(
+                            "banking.ai.cached.input.tokens",
+                            "model",
+                            model == null || model.isBlank()
+                                    ? "unknown"
+                                    : model
+                    ).increment(cachedInputTokens);
+                }
+
                 log.info(
                         "BANK_AI_USAGE requestId={} model={} "
                                 + "inputTokens={} outputTokens={} "
-                                + "totalTokens={} modelDurationMs={}",
+                                + "cachedInputTokens={} totalTokens={} "
+                                + "modelDurationMs={}",
                         requestId,
                         metadata.getModel(),
-                        usage.getPromptTokens(),
-                        usage.getCompletionTokens(),
+                        inputTokens,
+                        outputTokens,
+                        cachedInputTokens,
                         usage.getTotalTokens(),
                         elapsedMillis(modelStarted)
                 );
@@ -237,6 +280,63 @@ public class BankAssistant {
 
             throw exception;
         }
+    }
+
+    // Prices only the usage exposed by this returned ChatResponse.
+    // This is not an invoice total or verified per-tool-round accounting.
+    private void recordEstimatedChatCost(String model, Usage usage, String requestId) {
+        Integer input = usage.getPromptTokens();
+        Integer output = usage.getCompletionTokens();
+        Long cached = usage.getCacheReadInputTokens();
+        Long cacheWrites = usage.getCacheWriteInputTokens();
+
+        String skipReason = null;
+        if (!pricedModel.equals(model)) {
+            skipReason = "unpriced_model";
+        } else if (!validPrice(inputPrice) || !validPrice(cachedInputPrice)
+                || !validPrice(cacheWritePrice) || !validPrice(outputPrice)) {
+            skipReason = "invalid_price";
+        } else if (input == null || output == null || cached == null) {
+            skipReason = "missing_usage";
+        } else if (input < 0 || output < 0 || cached < 0 || cached > input
+                || (cacheWrites != null
+                && (cacheWrites < 0 || cacheWrites > input - cached))) {
+            skipReason = "invalid_usage";
+        } else if (input > maxPricedInputTokens) {
+            // Aggregated response usage cannot reliably select per-call long-context tiers.
+            skipReason = "outside_configured_context_tier";
+        }
+
+        if (skipReason != null) {
+            meterRegistry.counter("banking.ai.chat.cost.skipped.responses",
+                    "reason", skipReason).increment();
+            log.warn("BANK_AI_COST requestId={} estimatedCostUnavailable=true reason={}",
+                    requestId, skipReason);
+            return;
+        }
+
+        // When writes are not reported, estimate assumes no separate write premium.
+        long writes = cacheWrites == null ? 0L : cacheWrites;
+        long regularInput = input.longValue() - cached - writes;
+        double costUsd = (regularInput * inputPrice
+                + cached * cachedInputPrice
+                + writes * cacheWritePrice
+                + output.doubleValue() * outputPrice) / 1_000_000.0;
+
+        if (!Double.isFinite(costUsd) || costUsd < 0) {
+            log.warn("BANK_AI_COST requestId={} estimatedCostUnavailable=true reason=invalid_cost",
+                    requestId);
+            return;
+        }
+
+        meterRegistry.counter("banking.ai.chat.estimated.cost.usd",
+                "model", model).increment(costUsd);
+        log.info("BANK_AI_COST requestId={} model={} estimatedCostUsd={} cacheWriteUsageReported={}",
+                requestId, model, costUsd, cacheWrites != null);
+    }
+
+    private static boolean validPrice(double price) {
+        return Double.isFinite(price) && price >= 0;
     }
 
     private static int characterCount(String text) {

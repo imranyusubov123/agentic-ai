@@ -16,7 +16,7 @@ spring:
     name: ai-exprementation
   ai:
     openai:
-      api-key: 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
+      api-key: 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
       chat:
         options:
           model: gpt-5.6-luna
@@ -35,3 +35,35 @@ spring:
         distance-type: COSINE_DISTANCE
 docling:
   base-url: http://localhost:5001
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics, prometheus
+
+  endpoint:
+    health:
+      show-details: when_authorized
+
+  metrics:
+    tags:
+      application: banking-assistant
+
+  tracing:
+    sampling:
+      probability: 1.0
+
+  otlp:
+    tracing:
+      endpoint: http://localhost:4318/v1/traces
+
+banking:
+  ai:
+    cost:
+      model: gpt-5.6-luna
+      input-per-million: 0.20
+      cached-input-per-million: 0.02
+      cache-write-per-million: 0.25
+      output-per-million: 1.20
+      max-input-tokens: 272000
