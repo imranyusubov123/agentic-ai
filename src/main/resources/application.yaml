@@ -2,21 +2,26 @@ spring:
   autoconfigure:
     exclude:
       - org.springframework.ai.model.ollama.autoconfigure.OllamaEmbeddingAutoConfiguration
+
   servlet:
     multipart:
       max-file-size: 20MB
       max-request-size: 20MB
+
   sql:
     init:
       mode: always
       schema-locations: classpath:schema.sql
       continue-on-error: false
+
   datasource:
     url: jdbc:postgresql://localhost:5432/ingress_ai
     username: postgres
     password: postgres
+
   application:
     name: ai-exprementation
+
   ai:
     ollama:
       chat:
@@ -25,6 +30,7 @@ spring:
           temperature: 0
       embedding:
         enabled: false
+
     openai:
       api-key: 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
       chat:
@@ -38,11 +44,13 @@ spring:
       embedding:
         enabled: true
         model: text-embedding-3-small
+
     vectorstore:
       pgvector:
         initialize-schema: true
         dimensions: 1536
         distance-type: COSINE_DISTANCE
+
 docling:
   base-url: http://localhost:5001
 
@@ -50,7 +58,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health, info, metrics, prometheus
+        include: health,info,metrics,prometheus
 
   endpoint:
     health:
@@ -64,9 +72,23 @@ management:
     sampling:
       probability: 1.0
 
-  otlp:
+  opentelemetry:
     tracing:
-      endpoint: http://localhost:4318/v1/traces
+      export:
+        otlp:
+          endpoint: http://localhost:4318/v1/traces
+
+  # Disable OTLP metrics export.
+  # Prometheus will continue scraping /actuator/prometheus.
+  otlp:
+    metrics:
+      export:
+        enabled: false
+
+logging:
+  level:
+    io.opentelemetry.exporter: DEBUG
+    org.springframework.boot.actuate.autoconfigure.tracing: DEBUG
 
 banking:
   ai:

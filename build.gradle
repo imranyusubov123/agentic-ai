@@ -18,40 +18,54 @@ repositories {
 }
 
 ext {
-    set('springAiVersion', "2.0.1")
+    set('springAiVersion', '2.0.1')
 }
 
 dependencies {
-    implementation 'org.springframework.ai:spring-ai-starter-mcp-server-webmvc'
-    compileOnly 'org.projectlombok:lombok'
-    annotationProcessor 'org.projectlombok:lombok'
 
+    // Spring Boot
+    implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+
+    // Spring AI - Models
     implementation 'org.springframework.ai:spring-ai-starter-model-openai'
+    implementation 'org.springframework.ai:spring-ai-starter-model-ollama'
+
+    // Spring AI - RAG & Memory
     implementation 'org.springframework.ai:spring-ai-starter-vector-store-pgvector'
     implementation 'org.springframework.ai:spring-ai-starter-model-chat-memory-repository-jdbc'
 
-    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.16'
-    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.1'
+    // Spring AI - MCP
+    implementation 'org.springframework.ai:spring-ai-starter-mcp-server-webmvc'
 
-    implementation 'org.apache.pdfbox:pdfbox:3.0.6'
+    // LangGraph4j
+    implementation 'org.bsc.langgraph4j:langgraph4j-core:1.9.5'
+
+    // Observability
+    implementation 'org.springframework.boot:spring-boot-starter-opentelemetry'
+    runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
+
+    // Database
     runtimeOnly 'org.postgresql:postgresql'
     implementation 'org.flywaydb:flyway-core'
     implementation 'org.flywaydb:flyway-database-postgresql'
 
+    // Document Processing
+    implementation 'org.apache.pdfbox:pdfbox:3.0.6'
+
+    // Swagger / OpenAPI
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.1'
+
+    // Lombok
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+
     testCompileOnly 'org.projectlombok:lombok'
     testAnnotationProcessor 'org.projectlombok:lombok'
-    implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+
+    // Testing
     testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-
-    implementation("org.springframework.boot:spring-boot-starter-actuator")
-    runtimeOnly("io.micrometer:micrometer-registry-prometheus")
-    implementation("io.micrometer:micrometer-tracing-bridge-otel")
-    runtimeOnly("io.opentelemetry:opentelemetry-exporter-otlp")
-
-    implementation 'org.bsc.langgraph4j:langgraph4j-core:1.9.5'
-
-    implementation 'org.springframework.ai:spring-ai-starter-model-ollama'
 }
 
 dependencyManagement {
