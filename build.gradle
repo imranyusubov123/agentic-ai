@@ -48,6 +48,8 @@ dependencies {
     runtimeOnly("io.micrometer:micrometer-registry-prometheus")
     implementation("io.micrometer:micrometer-tracing-bridge-otel")
     runtimeOnly("io.opentelemetry:opentelemetry-exporter-otlp")
+
+    implementation 'org.bsc.langgraph4j:langgraph4j-core:1.9.5'
 }
 
 dependencyManagement {
