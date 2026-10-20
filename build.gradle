@@ -50,6 +50,8 @@ dependencies {
     runtimeOnly("io.opentelemetry:opentelemetry-exporter-otlp")
 
     implementation 'org.bsc.langgraph4j:langgraph4j-core:1.9.5'
+
+    implementation 'org.springframework.ai:spring-ai-starter-model-ollama'
 }
 
 dependencyManagement {

@@ -1,4 +1,7 @@
 spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.ai.model.ollama.autoconfigure.OllamaEmbeddingAutoConfiguration
   servlet:
     multipart:
       max-file-size: 20MB
@@ -15,6 +18,13 @@ spring:
   application:
     name: ai-exprementation
   ai:
+    ollama:
+      chat:
+        options:
+          model: qwen3:4b
+          temperature: 0
+      embedding:
+        enabled: false
     openai:
       api-key: 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
       chat:
@@ -26,8 +36,8 @@ spring:
             jdbc:
               initialize-schema: always
       embedding:
-        options:
-          model: text-embedding-3-small
+        enabled: true
+        model: text-embedding-3-small
     vectorstore:
       pgvector:
         initialize-schema: true

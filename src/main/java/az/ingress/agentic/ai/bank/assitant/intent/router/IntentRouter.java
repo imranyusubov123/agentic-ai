@@ -2,6 +2,7 @@ package az.ingress.agentic.ai.bank.assitant.intent.router;
 
 import az.ingress.agentic.ai.bank.assitant.intent.router.dto.RoutingDecision;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -9,9 +10,11 @@ public class IntentRouter {
 
     private final ChatClient chatClient;
 
-    public IntentRouter(ChatClient.Builder builder) {
-        this.chatClient = builder.build();
+    public IntentRouter(
+            @Qualifier("intentChatClient") ChatClient chatClient) {
+        this.chatClient = chatClient;
     }
+
 
     public RoutingDecision route(String message) {
 
