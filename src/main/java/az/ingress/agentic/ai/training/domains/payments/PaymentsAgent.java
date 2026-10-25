@@ -1,5 +1,6 @@
 package az.ingress.agentic.ai.training.domains.payments;
 
+import az.ingress.agentic.ai.training.demo.tools.DemoBankingTools;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -11,6 +12,7 @@ public class PaymentsAgent {
 
     private final ChatClient chatClient;
     private final PaymentsTools paymentsTools;
+    private final DemoBankingTools demoBankingTools;
 
     public String chat(
             String message,
@@ -35,7 +37,7 @@ public class PaymentsAgent {
                         Use only authorized banking tools.
                         """)
                 .user(message)
-                .tools(paymentsTools)
+                .tools(demoBankingTools)
                 .advisors(advisor -> advisor.param(
                         ChatMemory.CONVERSATION_ID,
                         conversationId
