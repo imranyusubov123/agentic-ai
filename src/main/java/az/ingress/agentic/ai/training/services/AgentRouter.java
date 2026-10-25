@@ -82,19 +82,19 @@ public class AgentRouter {
 
         Set<BankingIntent> domains = Set.copyOf(intents);
 
-        if (domains.equals(PAYMENT_WORKFLOW)
-                || domains.equals(PAYMENT_FEE_WORKFLOW)) {
+        // Allow only supported investigation domains.
+        Set<BankingIntent> supportedDomains =
+                Set.of(ACCOUNTS, PAYMENTS, FEES);
 
-            return bankingSupervisor.investigate(
-                    message,
-                    conversationId
-            );
+        if (!supportedDomains.containsAll(domains)) {
+            return "Unsupported multi-domain request.";
         }
 
-        return """
-                Your request involves multiple banking domains.
-                This combination is not supported yet.
-                """;
+        return bankingSupervisor.investigate(
+                message,
+                conversationId,
+                domains
+        );
     }
 
     private String routeSingleDomain(
@@ -103,20 +103,15 @@ public class AgentRouter {
             String conversationId) {
 
         return switch (intent) {
-            case ACCOUNTS ->
-                    accountsAgent.chat(message, conversationId);
+            case ACCOUNTS -> accountsAgent.chat(message, conversationId);
 
-            case CARDS ->
-                    cardsAgent.chat(message, conversationId);
+            case CARDS -> cardsAgent.chat(message, conversationId);
 
-            case PAYMENTS ->
-                    paymentsAgent.chat(message, conversationId);
+            case PAYMENTS -> paymentsAgent.chat(message, conversationId);
 
-            case FEES ->
-                    feesAgent.chat(message, conversationId);
+            case FEES -> feesAgent.chat(message, conversationId);
 
-            case UNKNOWN ->
-                    "Unsupported banking request.";
+            case UNKNOWN -> "Unsupported banking request.";
         };
     }
 }

@@ -9,8 +9,12 @@ public class BankingWorkflowState extends AgentState {
 
     public static final String QUESTION = "question";
     public static final String CONVERSATION_ID = "conversationId";
+
     public static final String ACCOUNT_RESULT = "accountResult";
     public static final String PAYMENT_RESULT = "paymentResult";
+    public static final String FEES_RESULT = "feesResult";
+    public static final String CARD_RESULT = "cardResult";
+
     public static final String FINAL_RESPONSE = "finalResponse";
 
     public BankingWorkflowState(Map<String, Object> data) {
@@ -31,6 +35,14 @@ public class BankingWorkflowState extends AgentState {
 
     public Optional<String> paymentResult() {
         return value(PAYMENT_RESULT);
+    }
+
+    public Optional<String> feesResult() {
+        return value(FEES_RESULT);
+    }
+
+    public Optional<String> cardResult() {
+        return value(CARD_RESULT);
     }
 
     public Optional<String> finalResponse() {

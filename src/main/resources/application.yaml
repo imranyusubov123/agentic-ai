@@ -32,7 +32,7 @@ spring:
         enabled: false
 
     openai:
-      api-key: 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
+      api-key: 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
       chat:
         options:
           model: gpt-5.6-luna
