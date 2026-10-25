@@ -1,6 +1,7 @@
 package az.ingress.agentic.ai.training.domains.fees;
 
 import az.ingress.agentic.ai.training.context.RagContextFormatter;
+import az.ingress.agentic.ai.training.demo.tools.DemoFeeTools;
 import az.ingress.agentic.ai.training.services.HybridSearchService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.client.ChatClient;
@@ -13,6 +14,7 @@ public class FeesAgent {
 
     private final ChatClient chatClient;
     private final FeesTools feesTools;
+    private final DemoFeeTools demoFeeTools;
     private final HybridSearchService hybridSearchService;
 
     public String chat(
@@ -62,7 +64,7 @@ public class FeesAgent {
                         Retrieved fee-policy evidence:
                         %s
                         """.formatted(message, evidence))
-                .tools(feesTools)
+                .tools(feesTools, demoFeeTools)
                 .advisors(advisor -> advisor.param(
                         ChatMemory.CONVERSATION_ID,
                         conversationId
