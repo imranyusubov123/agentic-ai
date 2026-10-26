@@ -2,8 +2,12 @@ package az.ingress.agentic.ai.training.demo.service;
 
 import az.ingress.agentic.ai.training.demo.dto.DemoTransfer;
 import az.ingress.agentic.ai.training.demo.dto.FeeVerificationResult;
+import az.ingress.agentic.ai.training.demo.workflow.TransferFeeWorkflowState;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.bsc.langgraph4j.CompiledGraph;
+import org.bsc.langgraph4j.GraphInput;
+import org.bsc.langgraph4j.RunnableConfig;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -16,74 +20,191 @@ import java.util.concurrent.ConcurrentHashMap;
 @RequiredArgsConstructor
 public class TransferInvestigationService {
 
+    private final CompiledGraph<TransferFeeWorkflowState> transferFeeWorkflow;
     private final DemoBankingService bankingService;
-    private final FeeCalculationService feeCalculationService;
 
-    // Demo-only storage. Restarting the application clears investigations.
-    private final Map<String, Investigation> investigations =
+    // In-memory synchronization only.
+    private final ConcurrentHashMap<String, Object> locks =
             new ConcurrentHashMap<>();
 
+    // Maps conversationId -> active investigationId.
+    // Actual workflow state is stored in LangGraph4j checkpoints.
+    private final ConcurrentHashMap<String, String> pendingByConversation =
+            new ConcurrentHashMap<>();
+
+    /**
+     * Starts a new transfer fee investigation.
+     * <p>
+     * LangGraph4j discovers recent transfers and pauses
+     * before fee verification, waiting for customer selection.
+     */
     public InvestigationResponse start(
             String conversationId,
             String message) {
 
-        if (conversationId == null || conversationId.isBlank()
-                || message == null || message.isBlank()) {
+        validateRequest(conversationId, message);
+
+        // Prevent creating multiple active investigations
+        // for the same conversation.
+        if (findPending(conversationId).isPresent()) {
             throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "conversationId and message are required"
+                    HttpStatus.CONFLICT,
+                    "Conversation already has a pending investigation"
             );
         }
 
         String investigationId = UUID.randomUUID().toString();
 
-        // For now, return all recent demo transfers.
-        // Transaction ranking will be implemented separately.
-        List<DemoTransfer> candidates = bankingService.getTransfers();
+        RunnableConfig config = config(investigationId);
 
-        Investigation investigation = new Investigation(
-                investigationId,
-                conversationId,
-                message,
-                candidates
-        );
+        locks.put(investigationId, new Object());
 
-        investigations.put(investigationId, investigation);
+        try {
+            log.info(
+                    "INVESTIGATION_STARTED investigationId={}",
+                    investigationId
+            );
 
-        log.info(
-                "INVESTIGATION_STARTED investigationId={} candidates={}",
-                investigationId,
-                candidates.size()
-        );
+            // Execute discovery until the configured interruption.
+            transferFeeWorkflow.invoke(
+                    GraphInput.args(Map.of(
+                            TransferFeeWorkflowState.CONVERSATION_ID,
+                            conversationId,
+                            TransferFeeWorkflowState.QUESTION,
+                            message
+                    )),
+                    config
+            );
 
-        return new InvestigationResponse(
-                investigationId,
-                "WAITING_FOR_SELECTION",
-                "I found recent transfers. Please select one.",
-                candidates,
-                null
-        );
+            // Retrieve the checkpoint saved by LangGraph4j.
+            Map<String, Object> state = checkpointState(config);
+
+            if (!"WAITING_FOR_SELECTION".equals(
+                    state.get(TransferFeeWorkflowState.STATUS))) {
+
+                throw new IllegalStateException(
+                        "Workflow did not pause for selection"
+                );
+            }
+
+            List<DemoTransfer> candidates =
+                    resolveCandidates(state);
+
+            // Register the pending investigation only after
+            // confirming that the workflow paused successfully.
+            pendingByConversation.put(
+                    conversationId,
+                    investigationId
+            );
+
+            log.info(
+                    "INVESTIGATION_PAUSED investigationId={} candidates={}",
+                    investigationId,
+                    candidates.size()
+            );
+
+            return new InvestigationResponse(
+                    investigationId,
+                    "WAITING_FOR_SELECTION",
+                    "I found recent transfers. Please select one.",
+                    candidates,
+                    null
+            );
+
+        } catch (RuntimeException exception) {
+
+            locks.remove(investigationId);
+
+            log.error(
+                    "INVESTIGATION_START_FAILED investigationId={}",
+                    investigationId,
+                    exception
+            );
+
+            throw exception;
+        }
     }
 
-    public InvestigationResponse select(
-            String investigationId,
-            String conversationId,
-            String transactionId) {
+    /**
+     * Finds the currently pending investigation for a conversation.
+     * <p>
+     * Used by BankingConversationOrchestrator to determine
+     * whether a customer message should resume an existing
+     * investigation instead of triggering new intent detection.
+     */
+    public Optional<PendingInvestigation> findPending(
+            String conversationId) {
 
-        Investigation investigation = investigations.get(investigationId);
+        if (conversationId == null || conversationId.isBlank()) {
+            return Optional.empty();
+        }
 
-        if (investigation == null) {
+        String investigationId =
+                pendingByConversation.get(conversationId);
+
+        if (investigationId == null) {
+            return Optional.empty();
+        }
+
+        RunnableConfig config = config(investigationId);
+
+        Map<String, Object> state;
+
+        try {
+            state = checkpointState(config);
+        } catch (ResponseStatusException exception) {
+
+            // The checkpoint may have expired or been lost.
+            pendingByConversation.remove(
+                    conversationId,
+                    investigationId
+            );
+
+            return Optional.empty();
+        }
+
+        // Verify that the checkpoint belongs to this conversation.
+        if (!conversationId.equals(
+                state.get(TransferFeeWorkflowState.CONVERSATION_ID))) {
+
             throw new ResponseStatusException(
                     HttpStatus.NOT_FOUND,
                     "Investigation not found"
             );
         }
 
-        if (conversationId == null
-                || !investigation.conversationId.equals(conversationId)) {
+        if (!"WAITING_FOR_SELECTION".equals(
+                state.get(TransferFeeWorkflowState.STATUS))) {
+
+            pendingByConversation.remove(
+                    conversationId,
+                    investigationId
+            );
+
+            return Optional.empty();
+        }
+
+        return Optional.of(
+                new PendingInvestigation(
+                        investigationId,
+                        resolveCandidates(state)
+                )
+        );
+    }
+
+    /**
+     * Resumes a checkpointed investigation after the customer
+     * selects one of the previously discovered transactions.
+     */
+    public InvestigationResponse select(
+            String investigationId,
+            String conversationId,
+            String transactionId) {
+
+        if (investigationId == null || investigationId.isBlank()) {
             throw new ResponseStatusException(
-                    HttpStatus.NOT_FOUND,
-                    "Investigation not found"
+                    HttpStatus.BAD_REQUEST,
+                    "investigationId is required"
             );
         }
 
@@ -94,19 +215,45 @@ public class TransferInvestigationService {
             );
         }
 
-        synchronized (investigation) {
+        Object lock = locks.computeIfAbsent(
+                investigationId,
+                id -> new Object()
+        );
 
-            if (investigation.completed) {
+        synchronized (lock) {
+
+            RunnableConfig config = config(investigationId);
+
+            Map<String, Object> state = checkpointState(config);
+
+            // Demo ownership validation.
+            // Production must use authenticated customer identity.
+            if (conversationId == null
+                    || !conversationId.equals(
+                    state.get(
+                            TransferFeeWorkflowState.CONVERSATION_ID
+                    ))) {
+
                 throw new ResponseStatusException(
-                        HttpStatus.CONFLICT,
-                        "Investigation already completed"
+                        HttpStatus.NOT_FOUND,
+                        "Investigation not found"
                 );
             }
 
-            boolean validSelection = investigation.candidates.stream()
-                    .anyMatch(t -> t.transactionId().equals(transactionId));
+            String status = (String) state.get(
+                    TransferFeeWorkflowState.STATUS
+            );
 
-            if (!validSelection) {
+            if (!"WAITING_FOR_SELECTION".equals(status)) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Investigation is not waiting for selection"
+                );
+            }
+
+            // A customer can only select a transaction
+            // discovered in this investigation.
+            if (!candidateIds(state).contains(transactionId)) {
                 throw new ResponseStatusException(
                         HttpStatus.BAD_REQUEST,
                         "Transaction is not in the candidate list"
@@ -114,23 +261,52 @@ public class TransferInvestigationService {
             }
 
             log.info(
-                    "TRANSACTION_SELECTED investigationId={} transactionId={}",
+                    "INVESTIGATION_RESUMING investigationId={} transactionId={}",
                     investigationId,
                     transactionId
             );
 
-            FeeVerificationResult result =
-                    feeCalculationService.verifyFee(transactionId);
+            // Resume the checkpointed LangGraph4j workflow.
+            var finalState = transferFeeWorkflow.invoke(
+                    GraphInput.resume(Map.of(
+                            TransferFeeWorkflowState.SELECTED_TRANSACTION_ID,
+                            transactionId
+                    )),
+                    config
+            ).orElseThrow(() ->
+                    new IllegalStateException(
+                            "Resumed workflow returned no state"
+                    )
+            );
 
-            String explanation = buildExplanation(result);
+            String explanation = finalState.finalResponse()
+                    .orElseThrow(() ->
+                            new IllegalStateException(
+                                    "Workflow returned no explanation"
+                            )
+                    );
 
-            investigation.completed = true;
+            FeeVerificationResult verification =
+                    finalState.verification()
+                            .orElseThrow(() ->
+                                    new IllegalStateException(
+                                            "Fee verification missing"
+                                    )
+                            );
+
+            // Clear the conversation's pending investigation.
+            pendingByConversation.remove(
+                    conversationId,
+                    investigationId
+            );
+
+            locks.remove(investigationId);
 
             log.info(
                     "INVESTIGATION_COMPLETED investigationId={} transactionId={} matchesPolicy={}",
                     investigationId,
                     transactionId,
-                    result.matchesPolicy()
+                    verification.matchesPolicy()
             );
 
             return new InvestigationResponse(
@@ -138,63 +314,128 @@ public class TransferInvestigationService {
                     "COMPLETED",
                     explanation,
                     List.of(),
-                    result
+                    verification
             );
         }
     }
 
-    private String buildExplanation(FeeVerificationResult result) {
+    /**
+     * Creates a LangGraph4j execution configuration.
+     * <p>
+     * Each investigation ID maps to a separate checkpoint thread.
+     */
+    private RunnableConfig config(String investigationId) {
 
-        if (!result.matchesPolicy()) {
-            return """
-                    The recorded commission does not match the expected
-                    commission under the applicable demo tariff.
-                    Further review is required.
-                    """;
+        return RunnableConfig.builder()
+                .threadId(investigationId)
+                .build();
+    }
+
+    /**
+     * Retrieves the latest workflow checkpoint.
+     * <p>
+     * LangGraph4j 1.9.5 getState() returns a snapshot directly
+     * and throws IllegalStateException when no checkpoint exists.
+     */
+    private Map<String, Object> checkpointState(
+            RunnableConfig config) {
+
+        try {
+            return transferFeeWorkflow.getState(config)
+                    .state()
+                    .data();
+
+        } catch (IllegalStateException exception) {
+
+            if ("Missing Checkpoint!".equals(
+                    exception.getMessage())) {
+
+                throw new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Investigation checkpoint not found",
+                        exception
+                );
+            }
+
+            throw exception;
         }
+    }
 
-        if ("MONTHLY_ALLOWANCE_EXCEEDED".equals(result.reasonCode())) {
-            return """
-                    Your %s AZN transfer exceeded the remaining monthly
-                    free transfer allowance of %s AZN.
-                    
-                    The applicable commission rate was %s%%.
-                    The expected commission was %s AZN, matching
-                    the recorded commission.
-                    """.formatted(
-                    result.transferAmount(),
-                    result.remainingAllowance(),
-                    result.commissionRate().multiply(
-                            java.math.BigDecimal.valueOf(100)),
-                    result.expectedFee()
+    /**
+     * Extracts transaction IDs saved in the workflow checkpoint.
+     */
+    private List<String> candidateIds(
+            Map<String, Object> state) {
+
+        Object value = state.get(
+                TransferFeeWorkflowState.CANDIDATE_IDS
+        );
+
+        if (!(value instanceof List<?> candidates)) {
+            throw new IllegalStateException(
+                    "Candidate transactions missing from workflow state"
             );
         }
 
-        return "The recorded commission matches the applicable demo tariff.";
+        return candidates.stream()
+                .map(candidate -> {
+
+                    if (!(candidate instanceof String id)) {
+                        throw new IllegalStateException(
+                                "Invalid candidate transaction ID"
+                        );
+                    }
+
+                    return id;
+                })
+                .toList();
     }
 
-    private static class Investigation {
+    /**
+     * Resolves the candidate IDs stored in the checkpoint
+     * to their current demo transfer records.
+     */
+    private List<DemoTransfer> resolveCandidates(
+            Map<String, Object> state) {
 
-        final String id;
-        final String conversationId;
-        final String message;
-        final List<DemoTransfer> candidates;
+        Set<String> ids = new HashSet<>(
+                candidateIds(state)
+        );
 
-        boolean completed;
+        return bankingService.getTransfers()
+                .stream()
+                .filter(transfer ->
+                        ids.contains(transfer.transactionId())
+                )
+                .toList();
+    }
 
-        Investigation(
-                String id,
-                String conversationId,
-                String message,
-                List<DemoTransfer> candidates) {
+    private void validateRequest(
+            String conversationId,
+            String message) {
 
-            this.id = id;
-            this.conversationId = conversationId;
-            this.message = message;
-            this.candidates = List.copyOf(candidates);
+        if (conversationId == null || conversationId.isBlank()
+                || message == null || message.isBlank()) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "conversationId and message are required"
+            );
         }
     }
 
+    /**
+     * Pending investigation information used by the chatbot.
+     */
+    public record PendingInvestigation(
+            String investigationId,
+            List<DemoTransfer> candidates
+    ) {
+    }
+
+    /**
+     * Existing response contract used by Postman and the chatbot.
+     */
     public record InvestigationResponse(
             String investigationId,
             String status,

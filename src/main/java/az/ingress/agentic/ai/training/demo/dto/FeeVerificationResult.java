@@ -1,5 +1,6 @@
 package az.ingress.agentic.ai.training.demo.dto;
 
+import java.io.Serializable;
 import java.math.BigDecimal;
 
 public record FeeVerificationResult(
@@ -15,5 +16,5 @@ public record FeeVerificationResult(
         BigDecimal recordedFee,
         boolean matchesPolicy,
         String reasonCode
-) {
+) implements Serializable {
 }
