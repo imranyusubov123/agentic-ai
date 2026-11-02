@@ -7,6 +7,7 @@ import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.memory.repository.jdbc.JdbcChatMemoryRepository;
 import org.springframework.ai.ollama.OllamaChatModel;
+import org.springframework.ai.ollama.api.OllamaChatOptions;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
@@ -46,6 +47,13 @@ public class ChatClientConfig {
             LangfuseAgentAdvisor langfuseAgentAdvisor) {
 
         return ChatClient.builder(model)
+                .defaultOptions(
+                        OllamaChatOptions.builder()
+                                .model("qwen3:4b")
+                                .temperature(0.0)
+                                .disableThinking()
+                                .format("json")
+                )
                 .defaultAdvisors(langfuseAgentAdvisor)
                 .build();
     }
