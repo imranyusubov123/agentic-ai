@@ -15,7 +15,7 @@ spring:
       continue-on-error: false
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/ingress_ai
+    url: jdbc:postgresql://localhost:5433/ingress_ai
     username: postgres
     password: postgres
 
@@ -25,11 +25,13 @@ spring:
   ai:
     ollama:
       chat:
-        options:
-          model: qwen3:4b
-          temperature: 0
-      embedding:
-        enabled: false
+        model: "qwen3.8:27b"  # Must match your installed Ollama tag
+        temperature: 0
+        think: false        # If supported by this model
+        num-predict: 512
+        num-ctx: 4096
+        keep-alive: 30m
+        format: json
 
     openai:
       api-key: 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
@@ -55,35 +57,27 @@ docling:
   base-url: http://localhost:5001
 
 management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info,metrics,prometheus
-
-  endpoint:
-    health:
-      show-details: when_authorized
-
-  metrics:
-    tags:
-      application: banking-assistant
+  # Disable metrics export to the nonexistent receiver on port 4318.
+  otlp:
+    metrics:
+      export:
+        enabled: false
 
   tracing:
     sampling:
       probability: 1.0
 
+  # Spring Boot 4 trace exporter configuration.
   opentelemetry:
     tracing:
       export:
         otlp:
-          endpoint: http://localhost:4318/v1/traces
+          endpoint: http://localhost:3000/api/public/otel/v1/traces
+          transport: http
+          headers:
+            Authorization: "Basic cGstbGYtOWZjNGU3NDktYTQ1YS00YTg2LWE2MDctYjY4ODJkMzMxZDk2OnNrLWxmLWIxMDRhY2IxLTc3ODMtNDFkYi05ZDAxLTllOTUzZjE4NzI1YQ=="
+            x-langfuse-ingestion-version: "4"
 
-  # Disable OTLP metrics export.
-  # Prometheus will continue scraping /actuator/prometheus.
-  otlp:
-    metrics:
-      export:
-        enabled: false
 
 logging:
   level:
