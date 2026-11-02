@@ -8,6 +8,7 @@ import az.ingress.agentic.ai.training.domains.payments.PaymentsAgent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -23,8 +24,7 @@ public class BankingWorkflowNodes {
     private final WorkflowObservationService observationService;
 
     /**
-     * Executes the domain agent selected by the validated plan.
-     * <p>
+     * Executes an investigation agent.
      * Only findings from declared dependencies are supplied.
      */
     public Map<String, Object> investigate(
@@ -32,8 +32,10 @@ public class BankingWorkflowNodes {
             BankingWorkflowState state,
             Map<String, String> dependencyFindings) {
 
+        validateInvestigationAgent(agent);
+
         return observationService.observe(
-                agent.name().toLowerCase(),
+                agent.name().toLowerCase(Locale.ROOT),
                 () -> {
                     String prompt = buildPrompt(
                             agent,
@@ -41,29 +43,42 @@ public class BankingWorkflowNodes {
                             dependencyFindings
                     );
 
-                    // Isolate agent memory to avoid concurrent writes
-                    // to the same conversation.
+                    // Separate memory for each domain.
                     String agentConversationId =
                             state.conversationId() + ":" + agent.name();
 
                     String result = switch (agent) {
                         case ACCOUNTS -> accountsAgent.chat(
-                                prompt, agentConversationId);
+                                prompt,
+                                agentConversationId
+                        );
 
                         case CARDS -> cardsAgent.chat(
-                                prompt, agentConversationId);
+                                prompt,
+                                agentConversationId
+                        );
 
                         case PAYMENTS -> paymentsAgent.chat(
-                                prompt, agentConversationId);
+                                prompt,
+                                agentConversationId
+                        );
 
                         case FEES -> feesAgent.chat(
-                                prompt, agentConversationId);
+                                prompt,
+                                agentConversationId
+                        );
 
-                        case UNKNOWN -> throw new IllegalArgumentException(
-                                "Unsupported agent: " + agent);
+                        case GENERAL, UNKNOWN ->
+                                throw unsupportedAgent(agent);
                     };
 
-                    return Map.of(
+                    if (result == null || result.isBlank()) {
+                        throw new IllegalStateException(
+                                "Empty investigation response from " + agent
+                        );
+                    }
+
+                    return Map.<String, Object>of(
                             resultKey(agent),
                             result
                     );
@@ -80,7 +95,7 @@ public class BankingWorkflowNodes {
             case ACCOUNTS -> """
                     Investigate account debits, credits,
                     balances, and relevant ledger entries.
-                    
+
                     Report only verified information.
                     Never infer payment settlement from a debit.
                     """;
@@ -93,21 +108,20 @@ public class BankingWorkflowNodes {
 
             case PAYMENTS -> """
                     Investigate transfer status and processing events.
-                    
+
                     Distinguish PENDING, SETTLED, FAILED, and UNKNOWN.
                     Never assume a timeout means payment failure.
                     """;
 
             case FEES -> """
                     Investigate banking fees and commissions.
-                    
+
                     Verify applicable fee policies.
                     Do not assume that a disputed fee is incorrect.
                     Do not initiate refunds.
                     """;
 
-            case UNKNOWN -> throw new IllegalArgumentException(
-                    "Unsupported agent");
+            case GENERAL, UNKNOWN -> throw unsupportedAgent(agent);
         };
 
         String findings = dependencyFindings.entrySet()
@@ -118,10 +132,10 @@ public class BankingWorkflowNodes {
 
         return """
                 %s
-                
+
                 Customer request:
                 %s
-                
+
                 Findings from completed dependencies:
                 %s
                 """.formatted(
@@ -134,26 +148,25 @@ public class BankingWorkflowNodes {
     }
 
     public String resultKey(BankingIntent agent) {
+        validateInvestigationAgent(agent);
+
         return switch (agent) {
             case ACCOUNTS -> BankingWorkflowState.ACCOUNT_RESULT;
             case CARDS -> BankingWorkflowState.CARD_RESULT;
             case PAYMENTS -> BankingWorkflowState.PAYMENT_RESULT;
             case FEES -> BankingWorkflowState.FEES_RESULT;
-            case UNKNOWN -> throw new IllegalArgumentException(
-                    "Unsupported agent");
+
+            case GENERAL, UNKNOWN -> throw unsupportedAgent(agent);
         };
     }
 
     /**
-     * Aggregates findings from the agents that actually executed.
+     * Aggregates findings from the agents that executed.
      */
-    public Map<String, Object> aggregate(
-            BankingWorkflowState state) {
-
+    public Map<String, Object> aggregate(BankingWorkflowState state) {
         return observationService.observe(
                 "aggregate",
                 () -> {
-
                     StringBuilder response =
                             new StringBuilder("Banking investigation:\n\n");
 
@@ -178,15 +191,38 @@ public class BankingWorkflowNodes {
                                     .append("\n\n"));
 
                     response.append(
-                            "These are investigation findings.\n" +
-                                    "No refund or reversal has been initiated."
+                            "These are investigation findings."
                     );
 
-                    return Map.of(
+                    return Map.<String, Object>of(
                             BankingWorkflowState.FINAL_RESPONSE,
                             response.toString()
                     );
                 }
+        );
+    }
+
+    private void validateInvestigationAgent(BankingIntent agent) {
+        if (agent == null) {
+            throw new IllegalArgumentException(
+                    "Investigation agent is required"
+            );
+        }
+
+        switch (agent) {
+            case ACCOUNTS, CARDS, PAYMENTS, FEES -> {
+                // Supported investigation domains.
+            }
+
+            case GENERAL, UNKNOWN -> throw unsupportedAgent(agent);
+        }
+    }
+
+    private IllegalArgumentException unsupportedAgent(
+            BankingIntent agent) {
+
+        return new IllegalArgumentException(
+                "Intent is not an investigation domain: " + agent
         );
     }
 }

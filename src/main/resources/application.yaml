@@ -31,10 +31,10 @@ spring:
         num-predict: 512
         num-ctx: 4096
         keep-alive: 30m
-        format: json
+#        format: json
 
     openai:
-      api-key: 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
+      api-key: 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
       chat:
         options:
           model: gpt-5.6-luna
@@ -93,3 +93,10 @@ banking:
       cache-write-per-million: 0.25
       output-per-million: 1.20
       max-input-tokens: 272000
+
+# application.yml
+langfuse:
+  base-url: ${LANGFUSE_BASE_URL:http://localhost:3000}
+  public-key: ${LANGFUSE_PUBLIC_KEY:pk-lf-a91b6856-671e-4ec5-aa66-0cdc7385cd34}
+  secret-key: ${LANGFUSE_SECRET_KEY:sk-lf-f48360d2-1632-4f99-bf31-435c87814ad3}
+

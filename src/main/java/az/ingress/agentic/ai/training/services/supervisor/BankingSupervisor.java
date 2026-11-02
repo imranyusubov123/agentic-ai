@@ -51,6 +51,7 @@ public class BankingSupervisor {
             // Step 1: Ask the LLM to propose tasks and dependencies.
             ExecutionPlan proposedPlan = supervisorPlanner.plan(
                     message,
+                    conversationId,
                     domains
             );
 

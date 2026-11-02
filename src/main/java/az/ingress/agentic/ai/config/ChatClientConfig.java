@@ -1,27 +1,23 @@
 package az.ingress.agentic.ai.config;
 
+import az.ingress.agentic.ai.training.services.langfuse.LangfuseAgentAdvisor;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.memory.repository.jdbc.JdbcChatMemoryRepository;
-import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.ollama.OllamaChatModel;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
-import org.springframework.core.io.Resource;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 @Configuration
+@EnableScheduling
 public class ChatClientConfig {
 
     @Bean
-    public ChatMemory chatMemory(
-            JdbcChatMemoryRepository repository) {
-
+    public ChatMemory chatMemory(JdbcChatMemoryRepository repository) {
         return MessageWindowChatMemory.builder()
                 .chatMemoryRepository(repository)
                 .maxMessages(3)
@@ -31,14 +27,13 @@ public class ChatClientConfig {
     @Bean
     @Primary
     public ChatClient bankingChatClient(
-            OpenAiChatModel openAiChatModel,
+            OllamaChatModel model,
             ChatMemory chatMemory,
-            @Value("classpath:/prompts/support-system.st")
-            Resource systemPrompt) {
+            LangfuseAgentAdvisor langfuseAgentAdvisor) {
 
-        return ChatClient.builder(openAiChatModel)
-                .defaultSystem(systemPrompt)
+        return ChatClient.builder(model)
                 .defaultAdvisors(
+                        langfuseAgentAdvisor,
                         MessageChatMemoryAdvisor.builder(chatMemory)
                                 .build()
                 )
@@ -47,18 +42,21 @@ public class ChatClientConfig {
 
     @Bean
     public ChatClient intentChatClient(
-            OllamaChatModel ollamaChatModel) {
+            OllamaChatModel model,
+            LangfuseAgentAdvisor langfuseAgentAdvisor) {
 
-        return ChatClient.builder(ollamaChatModel)
+        return ChatClient.builder(model)
+                .defaultAdvisors(langfuseAgentAdvisor)
                 .build();
     }
 
     @Bean("supervisorChatClient")
     public ChatClient supervisorChatClient(
-            @Qualifier("openAiChatModel") ChatModel model) {
+            OllamaChatModel model,
+            LangfuseAgentAdvisor langfuseAgentAdvisor) {
 
-        // Stateless client for LLM Supervisor planning.
-        // No conversation memory or banking tools.
-        return ChatClient.builder(model).build();
+        return ChatClient.builder(model)
+                .defaultAdvisors(langfuseAgentAdvisor)
+                .build();
     }
 }

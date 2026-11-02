@@ -54,7 +54,7 @@ public class BankingConversationOrchestrator {
         }
 
         // 2. Classify a new customer request.
-        IntentResult intent = intentDetector.detect(message);
+        IntentResult intent = intentDetector.detect(message, conversationId);
 
         // 3. Start the specialized fee investigation when appropriate.
         if (isTransferFeeInvestigation(intent, message)) {

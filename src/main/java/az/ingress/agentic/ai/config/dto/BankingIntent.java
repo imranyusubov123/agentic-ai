@@ -5,5 +5,6 @@ public enum BankingIntent {
     CARDS,
     PAYMENTS,
     FEES,
+    GENERAL,
     UNKNOWN
 }
