@@ -9,7 +9,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 @Slf4j
-@Service
+//@Service
 public class IntentRouter {
 
     private static final String SYSTEM_PROMPT = """

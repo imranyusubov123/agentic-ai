@@ -33,21 +33,30 @@ public class BankingSupervisor {
                     validate(message, conversationId, domains);
 
                     return observability.traceWorkflow(() -> {
-                        ExecutionPlan proposedPlan = supervisorPlanner.plan(
-                                message,
-                                conversationId,
-                                domains
+                        ExecutionPlan proposedPlan = observability.traceStage(
+                                "supervisor.plan",
+                                () -> supervisorPlanner.plan(
+                                        message,
+                                        conversationId,
+                                        domains
+                                )
                         );
 
-                        ExecutionPlan validatedPlan = planValidator.validate(
-                                proposedPlan,
-                                domains
+                        ExecutionPlan validatedPlan = observability.traceStage(
+                                "supervisor.validate",
+                                () -> planValidator.validate(
+                                        proposedPlan,
+                                        domains
+                                )
                         );
 
-                        return planExecutor.execute(
-                                validatedPlan,
-                                message,
-                                conversationId
+                        return observability.traceStage(
+                                "supervisor.execute",
+                                () -> planExecutor.execute(
+                                        validatedPlan,
+                                        message,
+                                        conversationId
+                                )
                         );
                     });
                 })

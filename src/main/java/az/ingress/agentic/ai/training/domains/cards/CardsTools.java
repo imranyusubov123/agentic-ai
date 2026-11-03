@@ -16,6 +16,8 @@ public class CardsTools {
             customer's debit card.
             """)
     public CardInfo getCardStatus() {
+        //session ->
+
         return cardService.getCard();
     }
 }
