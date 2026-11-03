@@ -1,10 +1,15 @@
 package az.ingress.agentic.ai.training.demo.service;
 
+import az.ingress.agentic.ai.config.dto.BankingIntent;
 import az.ingress.agentic.ai.config.dto.IntentResult;
 import az.ingress.agentic.ai.training.services.AgentRouter;
 import az.ingress.agentic.ai.training.services.IntentDetector;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
+import reactor.core.scheduler.Schedulers;
+
+import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
@@ -15,67 +20,82 @@ public class BankingConversationOrchestrator {
     private final TransferInvestigationService investigationService;
     private final TransferSelectionResolver selectionResolver;
 
-    public String chat(String message, String conversationId) {
+    public Flux<String> chat(String message, String conversationId) {
+        return Flux.<String>defer(() -> {
+            validate(message, conversationId);
 
-        // 1. Resume an existing investigation before classifying
-        // the customer's message as a new request.
-        var pending = investigationService
-                .findPending(conversationId);
+            // Resume an existing investigation.
+            var pending = investigationService.findPending(conversationId);
 
-        if (pending.isPresent()) {
+            if (pending.isPresent()) {
+                var investigation = pending.get();
 
-            var investigation = pending.get();
-
-            var transactionId = selectionResolver.resolve(
-                    message,
-                    investigation.candidates()
-            );
-
-            if (transactionId.isEmpty()) {
-                return """
-                        I couldn't identify which transfer you mean.
-                        Please select a transaction from the list:
-                        
-                        %s
-                        """.formatted(
-                        selectionResolver.formatCandidates(
-                                investigation.candidates()
-                        )
+                var transactionId = selectionResolver.resolve(
+                        message,
+                        investigation.candidates()
                 );
+
+                if (transactionId.isEmpty()) {
+                    String clarification = """
+                            I couldn't identify which transfer you mean.
+                            Please select a transaction from the list:
+                            
+                            %s
+                            """.formatted(
+                            selectionResolver.formatCandidates(
+                                    investigation.candidates()
+                            )
+                    );
+
+                    return Flux.just(clarification);
+                }
+
+                var response = investigationService.select(
+                        investigation.investigationId(),
+                        conversationId,
+                        transactionId.get()
+                );
+
+                return Flux.just(response.message());
             }
 
-            var response = investigationService.select(
-                    investigation.investigationId(),
-                    conversationId,
-                    transactionId.get()
+            // Classification remains synchronous on the worker thread.
+            IntentResult intent = intentDetector.detect(
+                    message,
+                    conversationId
             );
 
-            return response.message();
+            // Start a specialized transfer-fee investigation.
+            if (isTransferFeeInvestigation(intent, message)) {
+                var response = investigationService.start(
+                        conversationId,
+                        message
+                );
+
+                String answer = response.message() + "\n\n"
+                        + selectionResolver.formatCandidates(
+                        response.candidates()
+                );
+
+                return Flux.just(answer);
+            }
+
+            // Forward the agent's stream without collecting it.
+            return agentRouter.route(
+                    intent,
+                    message,
+                    conversationId
+            );
+        }).subscribeOn(Schedulers.boundedElastic());
+    }
+
+    private void validate(String message, String conversationId) {
+        if (message == null || message.isBlank()
+                || conversationId == null || conversationId.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Message and conversationId are required"
+            );
         }
-
-        // 2. Classify a new customer request.
-        IntentResult intent = intentDetector.detect(message, conversationId);
-
-        // 3. Start the specialized fee investigation when appropriate.
-        if (isTransferFeeInvestigation(intent, message)) {
-
-            var response = investigationService.start(
-                    conversationId,
-                    message
-            );
-
-            return response.message() + "\n\n"
-                    + selectionResolver.formatCandidates(
-                    response.candidates()
-            );
-        }
-
-        // 4. Route ordinary requests through the existing architecture.
-        return agentRouter.route(
-                intent,
-                message,
-                conversationId
-        );
     }
 
     private boolean isTransferFeeInvestigation(
@@ -86,15 +106,10 @@ public class BankingConversationOrchestrator {
             return false;
         }
 
-        String normalized = message.toLowerCase(
-                java.util.Locale.ROOT
-        );
+        String normalized = message.toLowerCase(Locale.ROOT);
 
-        return intent.intents().contains(
-                az.ingress.agentic.ai.config.dto.BankingIntent.FEES
-        ) && (
-                normalized.contains("transfer")
-                        || normalized.contains("köçürmə")
-        );
+        return intent.intents().contains(BankingIntent.FEES)
+                && (normalized.contains("transfer")
+                || normalized.contains("köçürmə"));
     }
 }

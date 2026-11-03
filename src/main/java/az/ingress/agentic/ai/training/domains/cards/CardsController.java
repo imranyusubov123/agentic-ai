@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
+import reactor.core.publisher.Flux;
 
 @RestController
 @RequestMapping("/agents/cards")
@@ -15,7 +16,7 @@ public class CardsController {
     private final CardService cardService;
 
     @GetMapping
-    public String chat(
+    public Flux<String> chat(
             @RequestParam String message,
             @RequestParam String conversationId) {
 

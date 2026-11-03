@@ -2,6 +2,7 @@ package az.ingress.agentic.ai.training.domains.fees;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Flux;
 
 @RestController
 @RequestMapping("/agents/fees")
@@ -11,7 +12,7 @@ public class FeesController {
     private final FeesAgent feesAgent;
 
     @GetMapping
-    public String chat(
+    public Flux<String> chat(
             @RequestParam String message,
             @RequestParam String conversationId) {
 

@@ -8,23 +8,13 @@ import az.ingress.agentic.ai.training.services.supervisor.planning.LangGraphPlan
 import az.ingress.agentic.ai.training.services.supervisor.planning.SupervisorPlanner;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.util.Objects;
 import java.util.Set;
 
-/**
- * Coordinates multi-domain banking investigations.
- * <p>
- * Execution flow:
- * 1. Validate the customer request and detected domains.
- * 2. Generate an investigation plan using the LLM Supervisor.
- * 3. Validate the proposed plan using deterministic Java rules.
- * 4. Execute the validated plan through LangGraph4j.
- * 5. Return the aggregated investigation findings.
- * <p>
- * The Supervisor decides WHAT needs to be investigated.
- * LangGraph4j executes the validated plan.
- */
 @Service
 @RequiredArgsConstructor
 public class BankingSupervisor {
@@ -34,47 +24,37 @@ public class BankingSupervisor {
     private final LangGraphPlanExecutor planExecutor;
     private final WorkflowObservabilityService observability;
 
-    /**
-     * Entry point for multi-domain banking investigations.
-     * <p>
-     * Called by AgentRouter after intent detection.
-     */
-    public String investigate(
+    public Flux<String> investigate(
             String message,
             String conversationId,
             Set<BankingIntent> domains) {
 
-        validate(message, conversationId, domains);
+        return Mono.fromCallable(() -> {
+                    validate(message, conversationId, domains);
 
-        return observability.traceWorkflow(() -> {
+                    return observability.traceWorkflow(() -> {
+                        ExecutionPlan proposedPlan = supervisorPlanner.plan(
+                                message,
+                                conversationId,
+                                domains
+                        );
 
-            // Step 1: Ask the LLM to propose tasks and dependencies.
-            ExecutionPlan proposedPlan = supervisorPlanner.plan(
-                    message,
-                    conversationId,
-                    domains
-            );
+                        ExecutionPlan validatedPlan = planValidator.validate(
+                                proposedPlan,
+                                domains
+                        );
 
-            // Step 2: Validate the proposed plan before execution.
-            ExecutionPlan validatedPlan = planValidator.validate(
-                    proposedPlan,
-                    domains
-            );
-
-            // Step 3: Execute the validated plan using LangGraph4j.
-            // Independent tasks can execute concurrently.
-            // Dependent tasks wait for their prerequisites.
-            return planExecutor.execute(
-                    validatedPlan,
-                    message,
-                    conversationId
-            );
-        });
+                        return planExecutor.execute(
+                                validatedPlan,
+                                message,
+                                conversationId
+                        );
+                    });
+                })
+                .subscribeOn(Schedulers.boundedElastic())
+                .flux();
     }
 
-    /**
-     * Validates the minimum required investigation inputs.
-     */
     private void validate(
             String message,
             String conversationId,
@@ -104,9 +84,10 @@ public class BankingSupervisor {
             );
         }
 
-        if (domains.contains(BankingIntent.UNKNOWN)) {
+        if (domains.contains(BankingIntent.UNKNOWN)
+                || domains.contains(BankingIntent.GENERAL)) {
             throw new IllegalArgumentException(
-                    "UNKNOWN is not a supported investigation domain"
+                    "GENERAL and UNKNOWN are not investigation domains"
             );
         }
     }

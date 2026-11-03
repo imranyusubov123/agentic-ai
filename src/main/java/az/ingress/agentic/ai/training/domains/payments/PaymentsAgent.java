@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
 
 @Service
 @RequiredArgsConstructor
@@ -14,7 +15,7 @@ public class PaymentsAgent {
     private final PaymentsTools paymentsTools;
     private final DemoBankingTools demoBankingTools;
 
-    public String chat(
+    public Flux<String> chat(
             String message,
             String conversationId) {
 
@@ -42,7 +43,7 @@ public class PaymentsAgent {
                         ChatMemory.CONVERSATION_ID,
                         conversationId
                 ))
-                .call()
+                .stream()
                 .content();
     }
 }

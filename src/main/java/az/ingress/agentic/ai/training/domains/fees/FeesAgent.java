@@ -9,6 +9,7 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
 
 @Service
 public class FeesAgent {
@@ -33,7 +34,7 @@ public class FeesAgent {
         this.systemPrompt = systemPrompt;
     }
 
-    public String chat(String message, String conversationId) {
+    public Flux<String> chat(String message, String conversationId) {
         return chat(message, conversationId, conversationId);
     }
 
@@ -41,7 +42,7 @@ public class FeesAgent {
      * Use separate IDs when a supervisor gives the agent
      * its own memory while retaining the original session.
      */
-    public String chat(
+    public Flux<String> chat(
             String message,
             String memoryConversationId,
             String sessionId) {
@@ -108,7 +109,7 @@ public class FeesAgent {
                                 sessionId
                         )
                 )
-                .call()
+                .stream()
                 .content();
     }
 }

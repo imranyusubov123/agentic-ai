@@ -6,6 +6,7 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
 
 @Service
 public class CardsAgent {
@@ -24,11 +25,11 @@ public class CardsAgent {
         this.systemPrompt = systemPrompt;
     }
 
-    public String chat(String message, String conversationId) {
+    public Flux<String> chat(String message, String conversationId) {
         return chat(message, conversationId, conversationId);
     }
 
-    public String chat(
+    public Flux<String> chat(
             String message,
             String memoryConversationId,
             String sessionId) {
@@ -69,7 +70,7 @@ public class CardsAgent {
                                 sessionId
                         )
                 )
-                .call()
+                .stream()
                 .content();
     }
 }

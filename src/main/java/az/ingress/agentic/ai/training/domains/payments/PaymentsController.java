@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Flux;
 
 @RestController
 @RequiredArgsConstructor
@@ -12,7 +13,7 @@ public class PaymentsController {
     private final PaymentsAgent paymentsAgent;
 
     @GetMapping("/agents/payments")
-    public String chat(
+    public Flux<String> chat(
             @RequestParam String message,
             @RequestParam String conversationId) {
 

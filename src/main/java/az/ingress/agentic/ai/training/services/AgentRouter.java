@@ -11,6 +11,7 @@ import az.ingress.agentic.ai.training.services.supervisor.BankingSupervisor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
 
 import java.util.List;
 import java.util.Set;
@@ -32,7 +33,7 @@ public class AgentRouter {
     private final FeesAgent feesAgent;
     private final GeneralSupportAgent generalSupportAgent;
 
-    public String route(
+    public Flux<String> route(
             IntentResult result,
             String message,
             String conversationId) {
@@ -47,7 +48,7 @@ public class AgentRouter {
         if (result == null
                 || result.intents() == null
                 || result.intents().isEmpty()) {
-            return "Could you clarify your banking request?";
+            return Flux.just("Could you clarify your banking request?");
         }
 
         List<BankingIntent> intents = result.intents()
@@ -62,7 +63,7 @@ public class AgentRouter {
         );
 
         if (intents.contains(null) || intents.contains(UNKNOWN)) {
-            return "Could you clarify which banking service you need?";
+            return Flux.just("Could you clarify which banking service you need?");
         }
 
         // General conversation does not require a specific banking request.
@@ -71,7 +72,7 @@ public class AgentRouter {
         }
 
         if (result.requiresClarification()) {
-            return "Could you clarify your banking request?";
+            return Flux.just("Could you clarify your banking request?");
         }
 
         // Ignore GENERAL when a specific banking domain is also present.
@@ -94,7 +95,7 @@ public class AgentRouter {
         );
     }
 
-    private String routeMultiDomain(
+    private Flux<String> routeMultiDomain(
             List<BankingIntent> intents,
             String message,
             String conversationId) {
@@ -102,7 +103,7 @@ public class AgentRouter {
         Set<BankingIntent> domains = Set.copyOf(intents);
 
         if (!SUPPORTED_INVESTIGATION_DOMAINS.containsAll(domains)) {
-            return "Unsupported multi-domain request.";
+            return Flux.just("Unsupported multi-domain request.");
         }
 
         return bankingSupervisor.investigate(
@@ -112,7 +113,7 @@ public class AgentRouter {
         );
     }
 
-    private String routeSingleDomain(
+    private Flux<String> routeSingleDomain(
             BankingIntent intent,
             String message,
             String conversationId) {
@@ -133,8 +134,9 @@ public class AgentRouter {
             case GENERAL -> generalSupportAgent.chat(
                     message, conversationId);
 
-            case UNKNOWN ->
-                    "Could you clarify which banking service you need?";
+            case UNKNOWN -> Flux.just(
+                    "Could you clarify which banking service you need?"
+            );
         };
     }
 }

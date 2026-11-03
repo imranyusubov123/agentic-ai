@@ -7,6 +7,7 @@ import az.ingress.agentic.ai.training.domains.fees.FeesAgent;
 import az.ingress.agentic.ai.training.domains.payments.PaymentsAgent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Flux;
 
 import java.util.Locale;
 import java.util.Map;
@@ -43,11 +44,10 @@ public class BankingWorkflowNodes {
                             dependencyFindings
                     );
 
-                    // Separate memory for each domain.
                     String agentConversationId =
                             state.conversationId() + ":" + agent.name();
 
-                    String result = switch (agent) {
+                    Flux<String> response = switch (agent) {
                         case ACCOUNTS -> accountsAgent.chat(
                                 prompt,
                                 agentConversationId
@@ -68,9 +68,16 @@ public class BankingWorkflowNodes {
                                 agentConversationId
                         );
 
-                        case GENERAL, UNKNOWN ->
-                                throw unsupportedAgent(agent);
+                        case GENERAL, UNKNOWN -> throw unsupportedAgent(agent);
                     };
+
+                    String result = response
+                            .collect(
+                                    StringBuilder::new,
+                                    (builder, chunk) -> builder.append(chunk)
+                            )
+                            .map(StringBuilder::toString)
+                            .block();
 
                     if (result == null || result.isBlank()) {
                         throw new IllegalStateException(
@@ -95,7 +102,7 @@ public class BankingWorkflowNodes {
             case ACCOUNTS -> """
                     Investigate account debits, credits,
                     balances, and relevant ledger entries.
-
+                    
                     Report only verified information.
                     Never infer payment settlement from a debit.
                     """;
@@ -108,14 +115,14 @@ public class BankingWorkflowNodes {
 
             case PAYMENTS -> """
                     Investigate transfer status and processing events.
-
+                    
                     Distinguish PENDING, SETTLED, FAILED, and UNKNOWN.
                     Never assume a timeout means payment failure.
                     """;
 
             case FEES -> """
                     Investigate banking fees and commissions.
-
+                    
                     Verify applicable fee policies.
                     Do not assume that a disputed fee is incorrect.
                     Do not initiate refunds.
@@ -132,10 +139,10 @@ public class BankingWorkflowNodes {
 
         return """
                 %s
-
+                
                 Customer request:
                 %s
-
+                
                 Findings from completed dependencies:
                 %s
                 """.formatted(
